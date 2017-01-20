@@ -27,8 +27,14 @@ import io.fabric8.kubernetes.client.DefaultKubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildRequestBuilder;
+import io.fabric8.openshift.api.model.ImageStream;
+import io.fabric8.openshift.api.model.ImageStreamTag;
 import io.fabric8.openshift.api.model.WebHookTriggerBuilder;
 import io.fabric8.openshift.client.OpenShiftClient;
+
+import java.util.HashMap;
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,77 +55,121 @@ public class BuildConfigExamples {
 
       client.serviceAccounts().inNamespace("thisisatest").create(fabric8);
 
-      log("Created image stream", client.imageStreams().inNamespace("thisisatest").createNew()
-        .withNewMetadata()
-        .withName("example-camel-cdi")
-        .endMetadata()
-        .withNewSpec()
-        .addNewTag()
-        .withName("latest")
-        .endTag()
-        .withDockerImageRepository("fabric8/example-camel-cdi")
-        .endSpec()
-        .withNewStatus().withDockerImageRepository("").endStatus()
-        .done());
+      ImageStream is = client.imageStreams().inNamespace("thisisatest").createNew()
+              .withNewMetadata()
+                  .withName("testname")
+              .endMetadata()
+              .withNewSpec()
+                  .addNewTag()
+                      .withName("latest")
+                  .endTag()
+                  .withDockerImageRepository("eclipse/ubuntu_jdk8")
+              .endSpec()
+              .withNewStatus().withDockerImageRepository("").endStatus()
+              .done();
 
-      log("Created image stream", client.imageStreams().inNamespace("thisisatest").createNew()
-        .withNewMetadata()
-        .withName("java-sti")
-        .endMetadata()
-        .withNewSpec()
-        .addNewTag()
-        .withName("latest")
-        .endTag()
-        .withDockerImageRepository("fabric8/java-sti")
-        .endSpec()
-        .withNewStatus().withDockerImageRepository("").endStatus()
-        .done());
+      Map<String, Object> img = is.getAdditionalProperties();
+      log("imageadditionalprops", img);
 
-      log("Created build config", client.buildConfigs().inNamespace("thisisatest").createNew()
-        .withNewMetadata()
-        .withName("custom-build-config")
-        .endMetadata()
-        .withNewSpec()
-        .withServiceAccount("fabric8")
-        .withNewSource()
-        .withType("Git")
-        .withNewGit()
-        .withUri("https://github.com/fabric8io/example-camel-cdi.git")
-        .endGit()
-        .endSource()
-        .withNewResources()
-          .addToLimits("mykey", new Quantity("10"))
-          .addToRequests("mykey", new Quantity("10"))
-        .endResources()
-        .withNewStrategy()
-        .withType("Source")
-        .withNewSourceStrategy()
-        .withNewFrom().withName("java-sti:latest").withKind("DockerImage").endFrom()
-        .endSourceStrategy()
-        .endStrategy()
-        .withNewOutput()
-        .withNewTo().withKind("DockerImage").withName("example-camel-cdi:latest").endTo()
-        .endOutput()
-        .addNewTrigger()
-        .withType("GitHub")
-        .withNewGithub()
-        .withSecret("secret101")
-        .endGithub()
-        .endTrigger()
-        .endSpec()
-        .done());
+      ImageStreamTag tag = client.imageStreamTags().inNamespace("thisisatest").createNew()
+              .withNewMetadata()
+                  .withName("testname:che-ws")
+              .endMetadata()
+              .withNewTag()
+                  .withNewFrom()
+                      .withKind("DockerImage")
+                      .withName("eclipse/ubuntu_jdk8")
+                  .endFrom()
+              .endTag()
+              .done();
 
-      Build build = client.buildConfigs().inNamespace("thisisatest").withName("custom-build-config").instantiate(new BuildRequestBuilder()
-        .withNewMetadata().withName("custom-build-config").endMetadata()
-        .build());
-      log("Build:", build.getMetadata().getName());
 
-      client.buildConfigs().inNamespace("thisisatest").withName("custom-build-config")
-        .withSecret("secret101")
-        .withType("github")
-        .trigger(new WebHookTriggerBuilder()
-          .withSecret("secret101")
-          .build());
+      client.buildConfigs().inNamespace("thisisatest").createNew()
+              .withNewMetadata()
+                  .withName("che-ws-build")
+              .endMetadata()
+              .withNewSpec()
+                  .withServiceAccount("fabric8")
+                  .withNewSource()
+                      .addNewImage()
+                          .withNewFrom()
+                              .withKind("ImageStreamTag")
+                              .withName("testname:che-ws")
+                              .withNamespace("thisisatest")
+                          .endFrom()
+                          .addNewPath()
+                              .withDestinationDir("uhh/what")
+                              .withSourcePath("/eclipse-che/ubuntu_jdk8")
+                          .endPath()
+                      .endImage()
+                  .endSource()
+                  .withNewStrategy()
+                      .withType("Docker")
+                      .withNewDockerStrategy()
+                          .withNewFrom()
+                              .withKind("ImageStreamTag")
+                              .withName("testname:che-ws")
+                              .withNamespace("thisisatest")
+                          .endFrom()
+                      .endDockerStrategy()
+                  .endStrategy()
+              .endSpec()
+              .withNewStatus()
+                  .withLastVersion(Integer.toUnsignedLong(1))
+              .endStatus()
+              .done();
+
+      Build build = client.buildConfigs().inNamespace("thisisatest").withName("che-ws-build")
+              .instantiate(new BuildRequestBuilder().withNewMetadata()
+                                                          .withName("che-ws-build")
+                                                    .endMetadata()
+                                                    .build());
+
+//      log("Created build config", client.buildConfigs().inNamespace("thisisatest").createNew()
+//        .withNewMetadata()
+//        .withName("custom-build-config")
+//        .endMetadata()
+//        .withNewSpec()
+//        .withServiceAccount("fabric8")
+//        .withNewSource()
+//        .withType("Git")
+//        .withNewGit()
+//        .withUri("https://github.com/fabric8io/example-camel-cdi.git")
+//        .endGit()
+//        .endSource()
+//        .withNewResources()
+//          .addToLimits("mykey", new Quantity("10"))
+//          .addToRequests("mykey", new Quantity("10"))
+//        .endResources()
+//        .withNewStrategy()
+//        .withType("Source")
+//        .withNewSourceStrategy()
+//        .withNewFrom().withName("java-sti:latest").withKind("DockerImage").endFrom()
+//        .endSourceStrategy()
+//        .endStrategy()
+//        .withNewOutput()
+//        .withNewTo().withKind("DockerImage").withName("example-camel-cdi:latest").endTo()
+//        .endOutput()
+//        .addNewTrigger()
+//        .withType("GitHub")
+//        .withNewGithub()
+//        .withSecret("secret101")
+//        .endGithub()
+//        .endTrigger()
+//        .endSpec()
+//        .done());
+
+//      Build build = client.buildConfigs().inNamespace("thisisatest").withName("custom-build-config").instantiate(new BuildRequestBuilder()
+//        .withNewMetadata().withName("custom-build-config").endMetadata()
+//        .build());
+//      log("Build:", build.getMetadata().getName());
+//
+//      client.buildConfigs().inNamespace("thisisatest").withName("custom-build-config")
+//        .withSecret("secret101")
+//        .withType("github")
+//        .trigger(new WebHookTriggerBuilder()
+//          .withSecret("secret101")
+//          .build());
 
 
       Thread.sleep(6000);
